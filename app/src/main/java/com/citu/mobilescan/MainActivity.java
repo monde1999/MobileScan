@@ -353,7 +353,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         int w = image.getWidth();
         int h = image.getHeight();
         ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-        byte[] bytes = new byte[w * h * 2];
+        byte[] bytes = new byte[w * h * 2]; // each pixel depth in image is saved in 2bytes
         buffer.get(bytes);
 
         int pixel, i=0;
