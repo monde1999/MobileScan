@@ -1,3 +1,5 @@
+from ctypes import resize
+from threading import Thread
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.request import Request
@@ -9,18 +11,52 @@ from .models import Modeler
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+import cv2
+import time
+from .z import *
+import open3d as o3d
 
 modeler = Modeler()
+trans = np.array([
+    [-1,0,0,0],
+    [-1,1,0,0],
+    [0,0,-1,0],
+    [0,0,0,1]
+])
+
+# class Data:
+    # frame = None
+        
+# def vis(data:Data):
+#     while data.frame is None:
+#         time.sleep(1.0)
+#     while True:
+#         cv2.imshow('Frame', data.frame)
+#         if cv2.waitKey(25) & 0xFF == ord('q'):
+#             break
+#     cv2.destroyAllWindows()
+# Thread(target=vis, args=(data,), daemon=True).start()
+
 
 @api_view(['POST', 'GET'])
 def integrate(request):
     if request.method=='GET':
         return Response('ok')
-    rgb = request.data['rgb']
-    rgb = default_storage.save('temp/images/rgb.jpg', ContentFile(rgb.read()))
-    depth = request.data['depth']
-    depth = default_storage.save('temp/images/depth.png', ContentFile(depth.read()))
-    modeler.add(rgb, depth)
+    rgb = request.FILES.get('rgb', None)
+    depth = request.FILES.get('depth', None)
+    if rgb and depth:
+        f_rgb = default_storage.save('temp/images/rgb.jpg', ContentFile(rgb.read()))
+        f_depth = default_storage.save('temp/images/depth.png', ContentFile(depth.read()))
+
+        rgb = Image.open(f_rgb)
+        rgb = rgb.resize((160,90))
+        rgb.save(f_rgb)
+        depth = np.fromfile(f_depth, dtype=np.uint16)
+        depth = np.reshape(depth, (90,160))
+        depth = Image.fromarray(depth)
+        depth.save(f_depth)
+
+        modeler.add(f_rgb, f_depth)
     return Response(status=status.HTTP_202_ACCEPTED)
 
 @api_view(['GET'])
@@ -37,13 +73,30 @@ def view(request:Request):
         f_depth = default_storage.save('temp/images/depth.png', ContentFile(depth.read()))
 
         rgb = Image.open(f_rgb)
+        rgb2 = rgb.resize((160,90))
+        rgb2.save(f_rgb)
         depth = np.fromfile(f_depth, dtype=np.uint16)
         depth = np.reshape(depth, (90,160))
         depth2 = Image.fromarray(depth)
         depth2.save(f_depth)
 
-        fig, axs = plt.subplots(1,2)
-        axs[0].imshow(rgb)
-        axs[1].imshow(depth)
-        plt.show()
+        rgbd = load_rgbd(f_rgb, f_depth)
+        pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, INTRINSIC)
+        pcd.transform(trans)
+        pcd = pcd.voxel_down_sample(0.01)
+        o3d.visualization.draw_geometries([pcd])
+        # volume = o3d.pipelines.integration.ScalableTSDFVolume(
+        #         voxel_length=4.0/512.0,
+        #         sdf_trunc=0.04,
+        #         color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8)
+        # volume.integrate(rgbd, INTRINSIC, np.linalg.inv(trans))
+        # mesh = volume.extract_triangle_mesh()
+        # mesh.compute_vertex_normals()
+        # o3d.visualization.draw_geometries([mesh])
+
+        # depth2 = Image.fromarray(depth)
+        # depth2 = depth2.rotate(-90)
+        # depth2 = depth2.resize((640,480))
+        # depth2 = np.array(depth2)
+        # data.frame = depth2
     return Response("ok", status=status.HTTP_200_OK)

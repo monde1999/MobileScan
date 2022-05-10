@@ -118,7 +118,7 @@ public class DepthData {
                                         + x * confidenceImagePlane.getPixelStride());
                 final float confidenceNormalized = ((float) (confidencePixelValue & 0xff)) / 255.0f;
 
-                if (confidenceNormalized < 0.3f || depthMeters > 2.0f) {
+                if (confidenceNormalized < 0.8f || depthMeters > 2.0f) {
                     // Ignores "low-confidence" pixels.
                     continue;
                 }

@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.annotation.RequiresApi;
@@ -72,12 +73,14 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     private boolean capture = false;
     private Random rand = new Random();
     private final String IP = "http://192.168.254.117:8000/modeler/view/";
+    private Button captureButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         surfaceView = findViewById(R.id.surfaceview);
+        captureButton = findViewById(R.id.capture_button);
         displayRotationHelper = new DisplayRotationHelper(/*context=*/ this);
 
         // Set up renderer.
@@ -214,9 +217,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
-
         displayRotationHelper.onSurfaceChanged(width, height);
-        System.out.println("******************************** width = "+ width + ", height =" + height);
         GLES20.glViewport(0, 0, width, height);
     }
 
@@ -319,9 +320,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             byte[] bytes_conf = new byte[buffer_conf.capacity()];
             buffer_depth.get(bytes_depth);
             buffer_conf.get(bytes_conf);
+            byte b1, b2;
             for (int i=0; i<bytes_conf.length; i++){
-                if (bytes_conf[i]<0.3f){
-                    bytes_depth[i] = 0;
+                if (/* bytes_conf[i]<0.3f || */ bytes_depth[i*2]>8){
+                    bytes_depth[i*2] = 0;
+                    bytes_depth[i*2+1] = 0;
                 }
             }
             fos_depth.write(bytes_depth); // to be formatted in server
@@ -341,7 +344,12 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     }
 
     public void onSavePicture(View view){
-        capture = true;
+        capture = !capture;
+//        if (capture){
+//            captureButton.setText("Stop Capture");
+//        } else {
+//            captureButton.setText("Start Capture");
+//        }
     }
 
     private void save_rgb(Bitmap bitmap, String fn){

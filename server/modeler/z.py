@@ -5,9 +5,9 @@ import copy
 from threading import Thread
 
 MAX_THREAD = 4
-FRAMES_PER_FRAGMENT = 100
+FRAMES_PER_FRAGMENT = 10
 
-INTRINSIC = o3d.camera.PinholeCameraIntrinsic(width=640, height=480, fx=525, fy=525, cx=319.5, cy=239.5)
+INTRINSIC = o3d.camera.PinholeCameraIntrinsic(width=160, height=90, fx=116.36878, fy=116.38366, cx=81.337074, cy=46.473267)
 ODO_OPTION = o3d.pipelines.odometry.OdometryOption()
 
 class Counter:
