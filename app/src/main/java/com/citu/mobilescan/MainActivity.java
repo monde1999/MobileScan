@@ -3,7 +3,6 @@ package com.citu.mobilescan;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
-import android.hardware.Sensor;
 import android.media.Image;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
@@ -17,11 +16,9 @@ import android.widget.Toast;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.citu.mobilescan.helpers.AABB;
 import com.citu.mobilescan.helpers.CameraPermissionHelper;
 import com.citu.mobilescan.helpers.DisplayRotationHelper;
 import com.citu.mobilescan.helpers.FullScreenHelper;
-import com.citu.mobilescan.helpers.PointClusteringHelper;
 import com.citu.mobilescan.helpers.SnackbarHelper;
 import com.citu.mobilescan.helpers.TrackingStateHelper;
 import com.citu.mobilescan.rendering.BackgroundRenderer;
@@ -45,14 +42,8 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
-import java.util.List;
 import java.util.Random;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -80,9 +71,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
 
     private boolean capture = false;
     private Random rand = new Random();
-    private int     captureFN = rand.nextInt(1000);
-    private Configuration newconfig;
-    private Pose rotation;
+    private final String IP = "http://192.168.254.117:8000/modeler/view/";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -216,28 +205,13 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         try {
             // Create the texture and pass it to ARCore session to be filled during update().
             backgroundRenderer.createOnGlThread(/*context=*/ this);
-           // depthRenderer.createOnGlThread(/*context=*/ this);
-            //boxRenderer.createOnGlThread(/*context=*/this);
+            depthRenderer.createOnGlThread(/*context=*/ this);
+            boxRenderer.createOnGlThread(/*context=*/this);
         } catch (IOException e) {
             Log.e(TAG, "Failed to read an asset file", e);
         }
     }
 
-    @Override
-    public void onConfigurationChanged(Configuration newConfig)
-    {
-        Log.d("tag", "config changed");
-        super.onConfigurationChanged(newConfig);
-
-        int orientation = newConfig.orientation;
-        if (orientation == Configuration.ORIENTATION_PORTRAIT)
-            Log.d("tag", "Portrait");
-        else if (orientation == Configuration.ORIENTATION_LANDSCAPE)
-            Log.d("tag", "Landscape");
-        else
-            Log.w("tag", "other: " + orientation);
-
-    }
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
 
@@ -246,6 +220,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         GLES20.glViewport(0, 0, width, height);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void onDrawFrame(GL10 gl) {
         // Clear screen to notify driver it should not load any pixels from previous frame.
@@ -289,11 +264,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             }
 
             // Filter the depth data.
-            //DepthData.filterUsingPlanes(points, session.getAllTrackables(Plane.class));
+            DepthData.filterUsingPlanes(points, session.getAllTrackables(Plane.class));
 
             // Visualize depth points.
-            //depthRenderer.update(points);
-            //depthRenderer.draw(camera);
+            depthRenderer.update(points);
+            depthRenderer.draw(camera);
 
             // Draw boxes around clusters of points.
            // PointClusteringHelper clusteringHelper = new PointClusteringHelper(points);
@@ -305,25 +280,11 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             if (capture){
                 rgb = frame.acquireCameraImage();
                 depth = frame.acquireRawDepthImage();
+                confidence = frame.acquireRawDepthConfidenceImage();
 
-                String fn = String.format("%08d", captureFN);
-
-                Bitmap bitmap = YUV2Bitmap.convert(this, rgb);
-
-                //to rotate img
-                if(surfaceView.getRotation() != 180) {
-                    Matrix rotateMatrix = new Matrix();
-                    rotateMatrix.postRotate(90);
-                    Bitmap rotateImg = Bitmap.createBitmap(bitmap, 0, 0, 160, 90, rotateMatrix, true);
-                    save_rgb(rotateImg, fn);
-                }
-                save_rgb(bitmap,fn);
-                bitmap.recycle();
-
-                save_depth(depth, fn);
+                sendData(rgb, depth, confidence);
 
                 capture = false;
-                captureFN++;
             }
         } catch (Throwable t) {
             // Avoid crashing the application due to unhandled exceptions.
@@ -336,15 +297,47 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private void sendData(File rgb, File depth){
+    private void sendData(Image rgb, Image depth, Image conf){
+        File f_rgb=null, f_depth=null;
         try {
-            MultipartUtility multipart = new MultipartUtility("http://127.0.0.1/modeler/send/");
-            multipart.addFilePart("rgb", rgb);
-            multipart.addFilePart("depth", depth);
+            f_rgb = File.createTempFile("rgb", ".jpg");
+            f_depth = File.createTempFile("depth", ".png");
+
+            FileOutputStream fos_rgb = new FileOutputStream(f_rgb);
+            FileOutputStream fos_depth = new FileOutputStream(f_depth);
+
+            // save rgb to file
+            Bitmap bm_rgb = YUV2Bitmap.convert(this, rgb);
+            bm_rgb.compress(Bitmap.CompressFormat.JPEG, 100, fos_rgb);
+            fos_rgb.flush();
+            fos_rgb.close();
+
+            //save depth to file
+            ByteBuffer buffer_depth = depth.getPlanes()[0].getBuffer();
+            ByteBuffer buffer_conf = conf.getPlanes()[0].getBuffer();
+            byte[] bytes_depth = new byte[buffer_depth.capacity()];
+            byte[] bytes_conf = new byte[buffer_conf.capacity()];
+            buffer_depth.get(bytes_depth);
+            buffer_conf.get(bytes_conf);
+            for (int i=0; i<bytes_conf.length; i++){
+                if (bytes_conf[i]<0.3f){
+                    bytes_depth[i] = 0;
+                }
+            }
+            fos_depth.write(bytes_depth); // to be formatted in server
+            fos_depth.flush();
+            fos_depth.close();
+
+            MultipartUtility multipart = new MultipartUtility(IP);
+            multipart.addFilePart("rgb", f_rgb);
+            multipart.addFilePart("depth", f_depth);
+            multipart.finish();
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            if (f_rgb!=null) f_rgb.delete();
+            if (f_depth!=null) f_depth.delete();
         }
-
     }
 
     public void onSavePicture(View view){
