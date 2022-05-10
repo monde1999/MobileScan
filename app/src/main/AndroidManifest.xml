@@ -16,6 +16,7 @@
         android:theme="@style/Theme.MobileScan">
         <activity
             android:name=".MainActivity"
+            android:configChanges="screenSize|orientation|screenLayout|navigation"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

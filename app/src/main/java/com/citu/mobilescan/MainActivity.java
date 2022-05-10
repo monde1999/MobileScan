@@ -1,6 +1,9 @@
 package com.citu.mobilescan;
 
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.Matrix;
+import android.hardware.Sensor;
 import android.media.Image;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
@@ -29,6 +32,7 @@ import com.google.ar.core.Camera;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
 import com.google.ar.core.Plane;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.TrackingState;
 import com.google.ar.core.exceptions.CameraNotAvailableException;
@@ -77,6 +81,8 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     private boolean capture = false;
     private Random rand = new Random();
     private int     captureFN = rand.nextInt(1000);
+    private Configuration newconfig;
+    private Pose rotation;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -210,16 +216,33 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         try {
             // Create the texture and pass it to ARCore session to be filled during update().
             backgroundRenderer.createOnGlThread(/*context=*/ this);
-            depthRenderer.createOnGlThread(/*context=*/ this);
-            boxRenderer.createOnGlThread(/*context=*/this);
+           // depthRenderer.createOnGlThread(/*context=*/ this);
+            //boxRenderer.createOnGlThread(/*context=*/this);
         } catch (IOException e) {
             Log.e(TAG, "Failed to read an asset file", e);
         }
     }
 
     @Override
+    public void onConfigurationChanged(Configuration newConfig)
+    {
+        Log.d("tag", "config changed");
+        super.onConfigurationChanged(newConfig);
+
+        int orientation = newConfig.orientation;
+        if (orientation == Configuration.ORIENTATION_PORTRAIT)
+            Log.d("tag", "Portrait");
+        else if (orientation == Configuration.ORIENTATION_LANDSCAPE)
+            Log.d("tag", "Landscape");
+        else
+            Log.w("tag", "other: " + orientation);
+
+    }
+    @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
+
         displayRotationHelper.onSurfaceChanged(width, height);
+        System.out.println("******************************** width = "+ width + ", height =" + height);
         GLES20.glViewport(0, 0, width, height);
     }
 
@@ -266,18 +289,18 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             }
 
             // Filter the depth data.
-            DepthData.filterUsingPlanes(points, session.getAllTrackables(Plane.class));
+            //DepthData.filterUsingPlanes(points, session.getAllTrackables(Plane.class));
 
             // Visualize depth points.
-            depthRenderer.update(points);
-            depthRenderer.draw(camera);
+            //depthRenderer.update(points);
+            //depthRenderer.draw(camera);
 
             // Draw boxes around clusters of points.
-            PointClusteringHelper clusteringHelper = new PointClusteringHelper(points);
-            List<AABB> clusters = clusteringHelper.findClusters();
-            for (AABB aabb : clusters) {
-                boxRenderer.draw(aabb, camera);
-            }
+           // PointClusteringHelper clusteringHelper = new PointClusteringHelper(points);
+           // List<AABB> clusters = clusteringHelper.findClusters();
+//            for (AABB aabb : clusters) {
+//                boxRenderer.draw(aabb, camera);
+//            }
 
             if (capture){
                 rgb = frame.acquireCameraImage();
@@ -286,7 +309,15 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 String fn = String.format("%08d", captureFN);
 
                 Bitmap bitmap = YUV2Bitmap.convert(this, rgb);
-                save_rgb(bitmap, fn);
+
+                //to rotate img
+                if(surfaceView.getRotation() != 180) {
+                    Matrix rotateMatrix = new Matrix();
+                    rotateMatrix.postRotate(90);
+                    Bitmap rotateImg = Bitmap.createBitmap(bitmap, 0, 0, 160, 90, rotateMatrix, true);
+                    save_rgb(rotateImg, fn);
+                }
+                save_rgb(bitmap,fn);
                 bitmap.recycle();
 
                 save_depth(depth, fn);
