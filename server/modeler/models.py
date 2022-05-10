@@ -1,4 +1,3 @@
-from yaml import load
 from .z import *
 from threading import Thread
 import time
