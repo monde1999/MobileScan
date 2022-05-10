@@ -31,7 +31,8 @@ public final class CameraPermissionHelper {
 
   private static final String REQUIRED_PERMISSIONS[] = {
           Manifest.permission.WRITE_EXTERNAL_STORAGE,
-          Manifest.permission.CAMERA
+          Manifest.permission.CAMERA,
+          Manifest.permission.INTERNET
   };
 
   /** Check to see we have the necessary permissions for this app. */

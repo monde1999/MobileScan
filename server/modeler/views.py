@@ -8,6 +8,7 @@ from .models import Modeler
 
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 
 modeler = Modeler()
 
@@ -29,15 +30,20 @@ def go(request):
 
 @api_view(['POST'])
 def view(request:Request):
-    # print(1, request.content_type)
-    # print(3, request.data)
-    # print(4, request.FILES)
-    stream_body = request.stream.body
-    # print(stream_body)
-    stream_body = np.frombuffer(stream_body, dtype=np.uint16)
-    stream_body = stream_body.reshape(160,90)
-    print(stream_body)
-    plt.imshow(stream_body, cmap="gray")
-    plt.show()
-    print(stream_body.shape)
+    rgb = request.FILES.get('rgb', None)
+    depth = request.FILES.get('depth', None)
+    if rgb and depth:
+        f_rgb = default_storage.save('temp/images/rgb.jpg', ContentFile(rgb.read()))
+        f_depth = default_storage.save('temp/images/depth.png', ContentFile(depth.read()))
+
+        rgb = Image.open(f_rgb)
+        depth = np.fromfile(f_depth, dtype=np.uint16)
+        depth = np.reshape(depth, (90,160))
+        depth2 = Image.fromarray(depth)
+        depth2.save(f_depth)
+
+        fig, axs = plt.subplots(1,2)
+        axs[0].imshow(rgb)
+        axs[1].imshow(depth)
+        plt.show()
     return Response("ok", status=status.HTTP_200_OK)
