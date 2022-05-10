@@ -309,9 +309,9 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
                 String fn = String.format("%08d", captureFN);
 
                 Bitmap bitmap = YUV2Bitmap.convert(this, rgb);
-
+                
                 //to rotate img
-                if(surfaceView.getRotation() != 180) {
+                if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
                     Matrix rotateMatrix = new Matrix();
                     rotateMatrix.postRotate(90);
                     Bitmap rotateImg = Bitmap.createBitmap(bitmap, 0, 0, 160, 90, rotateMatrix, true);
