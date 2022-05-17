@@ -100,8 +100,17 @@ public class DepthData {
         float[] pointCamera = new float[4];
         float[] pointWorld = new float[4];
 
-        for (int y = 0; y < depthHeight; y += step) {
-            for (int x = 0; x < depthWidth; x += step) {
+//        for (int y = 0; y < depthHeight; y += step) {
+//            for (int x = 0; x < depthWidth; x += step) {
+        for (int y = 20; y < 70; y++) {
+            for (int x = 40; x < 120; x++) {
+                /*
+                    0,0                          160,0
+                            40,5        120,5
+                            40,85        120,85
+                    90,0                          160,90
+                 */
+
                 // Depth images are tightly packed, so it's OK to not use row and pixel strides.
                 int depthMillimeters = depthBuffer.get(y * depthWidth + x); // Depth image pixels are in mm.
                 if (depthMillimeters == 0) {
@@ -118,7 +127,7 @@ public class DepthData {
                                         + x * confidenceImagePlane.getPixelStride());
                 final float confidenceNormalized = ((float) (confidencePixelValue & 0xff)) / 255.0f;
 
-                if (confidenceNormalized < 0.8f || depthMeters > 2.0f) {
+                if (confidenceNormalized < 0.8f /*|| depthMeters > 0.3f*/) {
                     // Ignores "low-confidence" pixels.
                     continue;
                 }

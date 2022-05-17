@@ -42,14 +42,17 @@ class FragmentGenerator:
             print('loaded: %d' % loaded.processes)
             time.sleep(1.0)
         loaded.processes += 1
-        odo = np.identity(4)
-        pose_graph = get_optimized_posegraph(self.rgbds_odo)
-        pcd = integrate(self.rgbds_odo, pose_graph)
         fn = 'temp/fragment000/fragment%03d.pcd' % fn
-        save_pcd(fn, pcd)
-        print('INFO: %s generated' % fn)
+        self.__integrate_and_save(self.rgbds_odo, fn)
         loaded.processes -= 1
         return fn
+
+    def __integrate_and_save(self, rgbds_odo, fn):
+        pose_graph = get_optimized_posegraph(rgbds_odo)
+        pcd = integrate(rgbds_odo, pose_graph)
+        save_pcd(fn, pcd)
+        print('INFO: %s generated' % fn)
+
 
 class Modeler:
     fragments = {}
@@ -78,7 +81,7 @@ class Modeler:
             self.loaded = Counter()
 
     
-    def __generate_model(self, fg:FragmentGenerator, fn:str, index:int, loaded:Counter):
+    def __generate_model(self, fg:FragmentGenerator, fn:int, index:int, loaded:Counter):
         fn = self.fg.generate_model(fn, loaded)
         self.fragments[index] = fn
 

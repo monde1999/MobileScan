@@ -17,9 +17,11 @@ import android.widget.Toast;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.citu.mobilescan.helpers.AABB;
 import com.citu.mobilescan.helpers.CameraPermissionHelper;
 import com.citu.mobilescan.helpers.DisplayRotationHelper;
 import com.citu.mobilescan.helpers.FullScreenHelper;
+import com.citu.mobilescan.helpers.PointClusteringHelper;
 import com.citu.mobilescan.helpers.SnackbarHelper;
 import com.citu.mobilescan.helpers.TrackingStateHelper;
 import com.citu.mobilescan.rendering.BackgroundRenderer;
@@ -45,6 +47,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
+import java.util.List;
 import java.util.Random;
 
 import javax.microedition.khronos.egl.EGLConfig;
@@ -71,9 +75,10 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
     private final BoxRenderer boxRenderer = new BoxRenderer();
 
     private boolean capture = false;
-    private Random rand = new Random();
     private final String IP = "http://192.168.254.117:8000/modeler/view/";
+    private int fn = 0;
     private Button captureButton;
+    private boolean continuous_capture = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -151,7 +156,7 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         try {
             // Enable raw depth estimation and auto focus mode while ARCore is running.
             Config config = session.getConfig();
-            config.setDepthMode(Config.DepthMode.RAW_DEPTH_ONLY);
+            config.setDepthMode(Config.DepthMode.AUTOMATIC);
             config.setFocusMode(Config.FocusMode.AUTO);
             session.configure(config);
             session.resume();
@@ -234,7 +239,6 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
         // the video background can be properly adjusted.
         displayRotationHelper.updateSessionIfNeeded(session);
 
-        Image rgb = null, depth = null, confidence = null;
         try {
             session.setCameraTextureName(backgroundRenderer.getTextureId());
 
@@ -272,84 +276,108 @@ public class MainActivity extends AppCompatActivity implements GLSurfaceView.Ren
             depthRenderer.draw(camera);
 
             // Draw boxes around clusters of points.
-           // PointClusteringHelper clusteringHelper = new PointClusteringHelper(points);
-           // List<AABB> clusters = clusteringHelper.findClusters();
+//            PointClusteringHelper clusteringHelper = new PointClusteringHelper(points);
+//            List<AABB> clusters = clusteringHelper.findClusters();
 //            for (AABB aabb : clusters) {
 //                boxRenderer.draw(aabb, camera);
 //            }
 
             if (capture){
-                rgb = frame.acquireCameraImage();
-                depth = frame.acquireRawDepthImage();
-                confidence = frame.acquireRawDepthConfidenceImage();
+                final Image rgb = frame.acquireCameraImage();
+                final Image depth = frame.acquireRawDepthImage();
+                final Image confidence = frame.acquireRawDepthConfidenceImage();
 
                 sendData(rgb, depth, confidence);
 
-                capture = false;
+                rgb.close();
+                depth.close();
+                confidence.close();
+
+                if (!continuous_capture) capture = false;
             }
         } catch (Throwable t) {
             // Avoid crashing the application due to unhandled exceptions.
             Log.e(TAG, "Exception on the OpenGL thread", t);
-        } finally {
-            if (rgb!=null) rgb.close();
-            if (depth!=null) depth.close();
-            if (confidence!=null) confidence.close();
         }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
     private void sendData(Image rgb, Image depth, Image conf){
-        File f_rgb=null, f_depth=null;
+        File f_rgb=null, f_depth=null, f_conf=null;
         try {
             f_rgb = File.createTempFile("rgb", ".jpg");
             f_depth = File.createTempFile("depth", ".png");
+            f_conf = File.createTempFile("conf", ".png");
 
             FileOutputStream fos_rgb = new FileOutputStream(f_rgb);
             FileOutputStream fos_depth = new FileOutputStream(f_depth);
+            FileOutputStream fos_conf = new FileOutputStream(f_conf);
 
             // save rgb to file
             Bitmap bm_rgb = YUV2Bitmap.convert(this, rgb);
-            bm_rgb.compress(Bitmap.CompressFormat.JPEG, 100, fos_rgb);
+            Bitmap bm_rgb_crop = Bitmap.createBitmap(bm_rgb, 0, 60, 640, 360);
+//            bm_rgb = Bitmap.createScaledBitmap(bm_rgb_crop, 160, 90, false);
+//            bm_rgb_crop = Bitmap.createBitmap(bm_rgb, 40, 20, 80, 50);
+            bm_rgb_crop.compress(Bitmap.CompressFormat.JPEG, 100, fos_rgb);
             fos_rgb.flush();
             fos_rgb.close();
 
-            //save depth to file
+            // save depth to file
             ByteBuffer buffer_depth = depth.getPlanes()[0].getBuffer();
             ByteBuffer buffer_conf = conf.getPlanes()[0].getBuffer();
-            byte[] bytes_depth = new byte[buffer_depth.capacity()];
-            byte[] bytes_conf = new byte[buffer_conf.capacity()];
-            buffer_depth.get(bytes_depth);
-            buffer_conf.get(bytes_conf);
-            byte b1, b2;
-            for (int i=0; i<bytes_conf.length; i++){
-                if (/* bytes_conf[i]<0.3f || */ bytes_depth[i*2]>8){
-                    bytes_depth[i*2] = 0;
-                    bytes_depth[i*2+1] = 0;
+            byte[] bytes_depth = new byte[80 * 50 * 2];
+            byte[] bytes_conf = new byte[80 * 50];
+//            buffer_depth.get(bytes_depth);
+//            buffer_conf.get(bytes_conf);
+            int i=0, j=0, index;
+            for (int y=20; y<70; y++) {
+                for (int x=40; x<120; x++){
+                    index = y * 160 + x;
+                    bytes_depth[i++] = buffer_depth.get(index*2);
+                    bytes_depth[i++] = buffer_depth.get(index*2+1);
+                    bytes_conf[j++] = buffer_conf.get(index);
                 }
             }
+
+//            for (int i=0; i<bytes_conf.length; i++){
+//                if ( bytes_conf[i]<75 /*||  bytes_depth[i*2]>8*/){
+//                    bytes_depth[i*2] = (byte) 255;
+//                    bytes_depth[i*2+1] = (byte) 255;
+//                }
+//            }
             fos_depth.write(bytes_depth); // to be formatted in server
+            fos_conf.write(bytes_conf); // // to be formatted in server
             fos_depth.flush();
+            fos_conf.flush();
             fos_depth.close();
+            fos_conf.close();
 
             MultipartUtility multipart = new MultipartUtility(IP);
+            multipart.addFormField("fn", String.valueOf(++fn));
             multipart.addFilePart("rgb", f_rgb);
             multipart.addFilePart("depth", f_depth);
+            multipart.addFilePart("conf", f_conf);
             multipart.finish();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
             if (f_rgb!=null) f_rgb.delete();
             if (f_depth!=null) f_depth.delete();
+            if (f_conf!=null) f_depth.delete();
         }
     }
 
     public void onSavePicture(View view){
-        capture = !capture;
-//        if (capture){
-//            captureButton.setText("Stop Capture");
-//        } else {
-//            captureButton.setText("Start Capture");
-//        }
+        if (continuous_capture){
+            capture = !capture;
+            if (capture){
+                captureButton.setText("Stop Capture");
+            } else {
+                captureButton.setText("Start Capture");
+            }
+        } else {
+            capture = true;
+        }
     }
 
     private void save_rgb(Bitmap bitmap, String fn){

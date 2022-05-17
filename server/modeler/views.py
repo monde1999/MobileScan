@@ -49,12 +49,14 @@ def integrate(request):
         f_depth = default_storage.save('temp/images/depth.png', ContentFile(depth.read()))
 
         rgb = Image.open(f_rgb)
-        rgb = rgb.resize((160,90))
-        rgb.save(f_rgb)
+        rgb2 = rgb.resize((160,90))
+        rgb2 = rgb2.crop((40,20,120,70))
+        rgb2.save(f_rgb)
         depth = np.fromfile(f_depth, dtype=np.uint16)
         depth = np.reshape(depth, (90,160))
-        depth = Image.fromarray(depth)
-        depth.save(f_depth)
+        depth2 = Image.fromarray(depth)
+        depth2 = depth2.crop((40,20,120,70))
+        depth2.save(f_depth)
 
         modeler.add(f_rgb, f_depth)
     return Response(status=status.HTTP_202_ACCEPTED)
@@ -66,25 +68,42 @@ def go(request):
 
 @api_view(['POST'])
 def view(request:Request):
+    fn = request.data.get('fn', None)
     rgb = request.FILES.get('rgb', None)
     depth = request.FILES.get('depth', None)
-    if rgb and depth:
-        f_rgb = default_storage.save('temp/images/rgb.jpg', ContentFile(rgb.read()))
-        f_depth = default_storage.save('temp/images/depth.png', ContentFile(depth.read()))
+    conf = request.FILES.get('conf', None)
+    if fn and rgb and depth:
+        fn = int(fn)
+        f_rgb = default_storage.save('temp/rgb/c%05d.jpg' % fn, ContentFile(rgb.read()))
+        f_depth = default_storage.save('temp/depth/d%05d.png' % fn, ContentFile(depth.read()))
+        f_conf = default_storage.save('temp/conf/c%05d.png' % fn, ContentFile(conf.read()))
 
         rgb = Image.open(f_rgb)
-        rgb2 = rgb.resize((160,90))
+        rgb = rgb.resize((160, 90))
+        rgb2 = rgb.crop((40,20,120,70))
         rgb2.save(f_rgb)
+
         depth = np.fromfile(f_depth, dtype=np.uint16)
-        depth = np.reshape(depth, (90,160))
+        depth = np.reshape(depth, (50,80))
         depth2 = Image.fromarray(depth)
         depth2.save(f_depth)
 
-        rgbd = load_rgbd(f_rgb, f_depth)
-        pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, INTRINSIC)
-        pcd.transform(trans)
-        pcd = pcd.voxel_down_sample(0.01)
-        o3d.visualization.draw_geometries([pcd])
+        conf = np.fromfile(f_conf, dtype=np.uint8)
+        conf = np.reshape(conf, (50,80))
+        conf2 = Image.fromarray(conf)
+        conf2.save(f_conf)
+
+        # _, axs = plt.subplots(1,3)
+        # axs[0].imshow(rgb)
+        # axs[1].imshow(depth)
+        # axs[2].imshow(conf)
+        # plt.show()
+
+        # rgbd = load_rgbd(f_rgb, f_depth)
+        # pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, INTRINSIC)
+        # pcd.transform(trans)
+        # o3d.visualization.draw_geometries([pcd])
+
         # volume = o3d.pipelines.integration.ScalableTSDFVolume(
         #         voxel_length=4.0/512.0,
         #         sdf_trunc=0.04,

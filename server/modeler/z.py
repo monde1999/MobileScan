@@ -1,3 +1,4 @@
+from matplotlib import widgets
 import open3d as o3d
 import numpy as np
 import time
@@ -5,10 +6,14 @@ import copy
 from threading import Thread
 
 MAX_THREAD = 4
-FRAMES_PER_FRAGMENT = 10
+FRAMES_PER_FRAGMENT = 100
 
-INTRINSIC = o3d.camera.PinholeCameraIntrinsic(width=160, height=90, fx=116.36878, fy=116.38366, cx=81.337074, cy=46.473267)
+# 0,0,160,90 --> 0,60,640,420
+INTRINSIC = o3d.camera.PinholeCameraIntrinsic(width=80, height=50, fx=116.36878, fy=116.38366, cx=41.337074, cy=26.473267)
+# INTRINSIC = o3d.camera.PinholeCameraIntrinsic(width=160, height=90, fx=116.36878, fy=116.38366, cx=81.337074, cy=46.473267)
 ODO_OPTION = o3d.pipelines.odometry.OdometryOption()
+
+
 
 class Counter:
     processes = 0
@@ -20,15 +25,28 @@ def load_pcd(fn):
     return o3d.io.read_point_cloud(fn)
 
 def visualize(geometries):
-    o3d.visualization.draw_geometries(geometries,
-                                    zoom=0.48,
-                                    front=[0.0999, -0.1787, -0.9788],
-                                    lookat=[0.0345, -0.0937, 1.8033],
-                                    up=[-0.0067, -0.9838, 0.1790])
+    geo_copies = []
+    # trans = np.array([
+    #     [-1,0,0,0],
+    #     [-1,1,0,0],
+    #     [0,0,-1,0],
+    #     [0,0,0,1]
+    # ])
+    trans = np.array([
+        [0,-2,0,0],
+        [-2,0,0,0],
+        [0,0,-1,0],
+        [0,0,0,1]
+    ])
+    for g in geometries:
+        c = copy.deepcopy(g)
+        c.transform(trans)
+        geo_copies.append(c)
+    o3d.visualization.draw_geometries(geo_copies)
 
 def integrate(rgbds_odo, pose_graph):
     volume = o3d.pipelines.integration.ScalableTSDFVolume(
-                voxel_length=4.0/512.0,
+                voxel_length=1.0/512.0,
                 sdf_trunc=0.04,
                 color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8)
     i = 0
@@ -36,6 +54,7 @@ def integrate(rgbds_odo, pose_graph):
         rgb, depth = rgbds_odo[i][3]
         rgbd = load_rgbd(rgb, depth)
         volume.integrate(rgbd, INTRINSIC, np.linalg.inv(node.pose))
+        # visualize([volume.extract_point_cloud()])
         i += 1
     return volume.extract_point_cloud()
 
@@ -59,7 +78,7 @@ def get_optimized_posegraph(rgbds_odo:dict):
                                                                                 trans,
                                                                                 info,
                                                                                 uncertain=False))
-            elif source_id%5==0 and target_id%5==0:
+            else: #source_id%5==0 and target_id%5==0:
                 rgb, depth = rgbds_odo[target_id][3]
                 target_rgbd = load_rgbd(rgb, depth)
                 success, trans, info = o3d.pipelines.odometry.compute_rgbd_odometry(
@@ -74,11 +93,11 @@ def get_optimized_posegraph(rgbds_odo:dict):
     method = o3d.pipelines.registration.GlobalOptimizationLevenbergMarquardt()
     criteria = o3d.pipelines.registration.GlobalOptimizationConvergenceCriteria()
     option = o3d.pipelines.registration.GlobalOptimizationOption(
-            max_correspondence_distance=0.05,
+            max_correspondence_distance=0.002,
             edge_prune_threshold=0.25,
             preference_loop_closure=0.25,
             reference_node=0)
-    # o3d.pipelines.registration.global_optimization(pose_graph, method, criteria, option)
+    o3d.pipelines.registration.global_optimization(pose_graph, method, criteria, option)
     return pose_graph
 
 
