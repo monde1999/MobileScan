@@ -1,0 +1,5 @@
+to do:
+
+1. create whole object model
+2. visualization
+3. whole system automation

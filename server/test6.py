@@ -6,9 +6,9 @@ from modeler.z import *
 
 fn = 1
 
-r0 = Image.open('dataset/rgb/c%05d.jpg' % fn)
-d0 = Image.open('dataset/depth/d%05d.png' % fn)
-c0 = Image.open('dataset/conf/c%05d.png' % fn)
+r0 = Image.open('temp/rgb/c%05d.jpg' % fn)
+d0 = Image.open('temp/depth/d%05d.png' % fn)
+c0 = Image.open('temp/conf/c%05d.png' % fn)
 
 r0 = np.array(r0, dtype=np.uint8)
 r01 = (r0[:, :, 0] + r0[:, :, 1] + r0[:, :, 2]) // 3  # grayscale
@@ -91,7 +91,7 @@ def fix(color, depth, conf):
 # for i in range(5):
 #     print(i+1, '...')
 #     fix(r1, d1, c1)
-fix(r1, d1, c1)
+# fix(r1, d1, c1)
 
 r1 = r1[1:50+KERNEL-2,1:80+KERNEL-2]
 d1 = d1[1:50+KERNEL-2,1:80+KERNEL-2]

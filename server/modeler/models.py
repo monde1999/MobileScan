@@ -37,7 +37,7 @@ class FragmentGenerator:
         loaded.processes -= 1
 
     def generate_model(self, fn, loaded:Counter):
-        print('generating fragment...')
+        print('\ngenerating fragment...')
         while loaded.processes!=0:
             print('loaded: %d' % loaded.processes)
             time.sleep(1.0)
@@ -52,11 +52,12 @@ class FragmentGenerator:
         pcd = integrate(rgbds_odo, pose_graph)
         save_pcd(fn, pcd)
         print('INFO: %s generated' % fn)
+        visualize([pcd])
 
 
 class Modeler:
     fragments = {}
-    pcd = None
+    pcd = None 
     mesh = None
 
     fg = FragmentGenerator()
